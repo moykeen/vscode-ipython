@@ -247,10 +247,10 @@ export function activate(context: vscode.ExtensionContext) {
 		let editor = getEditor();
 
 		let terminal = await getTerminal(editor.document.fileName);
+		if (resetFirst) {
+			await execute(terminal, `%reset -f`);
+		}
 		if (runWholeFileByMagicCommand) {
-			if (resetFirst) {
-				await execute(terminal, `%reset -f`);
-			}
 			await execute(terminal, `%run ${editor.document.fileName}`);
 		} else {
 			await execute(terminal, editor.document.getText());
