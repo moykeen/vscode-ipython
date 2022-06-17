@@ -71,6 +71,66 @@ export function activate(context: vscode.ExtensionContext) {
 		runWholeFileByMagicCommand = config.get('runWholeFileByMagicCommand') as boolean;
 	}
 
+	let timeout: NodeJS.Timer | undefined = undefined;
+	const cellHeaderDecorationType = vscode.window.createTextEditorDecorationType({
+		isWholeLine: true,
+		borderWidth: `1px 0 0 0`,
+		borderStyle: 'solid'
+	});
+	let activeEditor = vscode.window.activeTextEditor;
+
+	function updateDecorations() {
+		if (!activeEditor) {
+			return;
+		}
+		let config = vscode.workspace.getConfiguration('ipython');
+		let cellFlag = config.get('cellTag') as string;
+		const cellPatternForHeaderDetection = new RegExp(cellFlag.replace(' ', '\\s*'), 'g');
+
+		const text = activeEditor.document.getText();
+		const cellHeaders: vscode.DecorationOptions[] = [];
+		let match;
+		while ((match = cellPatternForHeaderDetection.exec(text))) {
+			const startPos = activeEditor.document.positionAt(match.index);
+			const endPos = activeEditor.document.positionAt(match.index + match[0].length);
+			const decoration = { range: new vscode.Range(startPos, endPos), hoverMessage: 'Number **' + match[0] + '**' };
+			cellHeaders.push(decoration);
+		}
+		activeEditor.setDecorations(cellHeaderDecorationType, cellHeaders);
+	}
+
+	function triggerUpdateDecorations(throttle = false) {
+		if (timeout) {
+			clearTimeout(timeout);
+			timeout = undefined;
+		}
+		if (throttle) {
+			timeout = setTimeout(updateDecorations, 500);
+		} else {
+			updateDecorations();
+		}
+	}
+
+	if (activeEditor) {
+		triggerUpdateDecorations();
+	}
+
+	vscode.window.onDidChangeActiveTextEditor(editor => {
+		activeEditor = editor;
+		if (editor) {
+			triggerUpdateDecorations();
+		}
+	}, null, context.subscriptions);
+
+	vscode.workspace.onDidChangeTextDocument(event => {
+		if (event.contentChanges.length === 0) {
+			return;
+		}
+		if (activeEditor && event.document === activeEditor.document) {
+			triggerUpdateDecorations(true);
+		}
+	}, null, context.subscriptions);
+
 	// === LOCAL HELPERS ===
 	async function execute(terminal: vscode.Terminal, cmd: string) {
 		// There is a fundamental issue here.
