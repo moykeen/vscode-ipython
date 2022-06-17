@@ -147,40 +147,42 @@ export function activate(context: vscode.ExtensionContext) {
 		// users will have to tweak the delay parameters until things behave in
 		// their systems. This is probably why the original code used the `%run`
 		// magic command instead.
-		if (cmd.length > 0) {
-			terminal.show(true);  // preserve focus
-			// FIXME: This returns immediately, before the terminal has updated,
-			// so no amount of `minimumExecutionDelayMilliseconds` will be
-			// correct if `cmd` varies in length.
-			terminal.sendText(cmd, false);
-			console.log(`Command sent to terminal`);
-			let lines = cmd.split(newLine);
-			let lastLine = lines[lines.length - 1];
-			// Attempt to detect if the last line was indented.
-			if(lastLine.startsWith(' ') || lastLine.startsWith('\t')) {
-				terminal.sendText('', true);
-				console.log(`Newline sent to terminal due to indentation`);
-			}
-			// NOTE: In IPython, ESC, Enter executes the buffer. However, we
-			// cannot send this combination via standard input. See
-			// https://github.com/prompt-toolkit/python-prompt-toolkit/issues/1637
-			// let executeBuffer: string = '\x1B\x0D'; // ESC, Enter
-			// terminal.sendText(executeBuffer, false);
-			let n100Chars = cmd.length / 100;
-			let delay = n100Chars * execDelayPer100CharsMsec + minExecDelayMsec;
-			console.log(`Waiting ${delay} milliseconds to send execution newline for ${cmd.length} characters...`);
-			await wait(delay);
-			terminal.sendText('', true);
-			console.log(`Newline sent to terminal to execute`);
-			await vscode.commands.executeCommand('workbench.action.terminal.scrollToBottom');
+		if (cmd.length === 0) {
+			return;
 		}
+
+		terminal.show(true);  // preserve focus
+		let lines = cmd.split(newLine);
+		lines = lines.filter(s => s.trim());
+		console.log(lines);
+
+		// for the single line case, just send text
+		if (lines.length === 1) {
+			terminal.sendText(lines[0], false);
+			await wait(minExecDelayMsec);
+			terminal.sendText('', true);
+
+		// for the multi line case
+		} else {
+			// send Ctrl-O to enable multiline mode
+			await vscode.commands.executeCommand("workbench.action.terminal.sendSequence", { text : "\x0f" });
+			for (let line of lines) {
+				terminal.sendText(line, true);
+			}
+			await wait(minExecDelayMsec);
+			terminal.sendText('', true);
+		}
+
+		await vscode.commands.executeCommand('workbench.action.terminal.scrollToBottom');
+
 	}
 
 	async function createTerminal(terminalName: string): Promise<vscode.Terminal> {
 		console.log('Creating IPython Terminal...');
 
 		// -- Create and Tag IPython Terminal
-		await vscode.commands.executeCommand('workbench.action.createTerminalEditor');
+		// await vscode.commands.executeCommand('workbench.action.createTerminalEditor');
+		await vscode.commands.executeCommand("workbench.action.terminal.new");  // prefer normal terminal
 		await vscode.commands.executeCommand('workbench.action.terminal.renameWithArg', {name : terminalName});
 		console.log(`Waiting ${terminalDelayMsec} before executing IPython`);
 		await wait(terminalDelayMsec);
@@ -206,6 +208,10 @@ export function activate(context: vscode.ExtensionContext) {
 		// See notes in `execute` regarding delays.
 		console.log(`Waiting ${ipythonDelayMsec} milliseconds after IPython launch...`);
 		await wait(ipythonDelayMsec);
+
+		// setup for handling multi line commands
+		await execute(terminal, "from IPython.terminal import interactiveshell; interactiveshell.TerminalInteractiveShell.autoindent = False");
+
 		return terminal;
 	}
 
@@ -270,6 +276,15 @@ export function activate(context: vscode.ExtensionContext) {
 		let terminal = await getTerminal(editor.document.fileName);
 		let cmd = '';
 		for (let selection of editor.selections) {
+			// if selection has leading whilespaces, include them to capture correct indent
+			const leadingLetters = editor.document.getText(new vscode.Selection(
+				new vscode.Position(selection.start.line, 0),
+				new vscode.Position(selection.start.line, selection.start.character)).with());
+			if (leadingLetters.trim().length === 0) {
+				selection = new vscode.Selection(
+					new vscode.Position(selection.start.line, 0), selection.end
+				);
+			}
 			cmd += editor.document.getText(selection.with());
 		}
 		await execute(terminal, cmd);
