@@ -55,6 +55,7 @@ export function activate(context: vscode.ExtensionContext) {
 	let minExecDelayMsec: number;
 	let launchArgs: string;
 	let startupCmds: string[];
+	let runWholeFileByMagicCommand: boolean;
 	function updateConfig() {
 		console.log('Updating configuration...');
 		let config = vscode.workspace.getConfiguration('ipython');
@@ -67,6 +68,7 @@ export function activate(context: vscode.ExtensionContext) {
 		minExecDelayMsec = config.get('delays.minimumExecutionDelayMilliseconds') as number;
 		launchArgs = config.get('launchArguments') as string;
 		startupCmds = config.get('startupCommands') as string[];
+		runWholeFileByMagicCommand = config.get('runWholeFileByMagicCommand') as boolean;
 	}
 
 	// === LOCAL HELPERS ===
@@ -183,11 +185,16 @@ export function activate(context: vscode.ExtensionContext) {
 		updateConfig();
 		console.log('IPython run file...');
 		let editor = getEditor();
+
 		let terminal = await getTerminal(editor.document.fileName);
-		if (resetFirst) {
-			await execute(terminal, `%reset -f`);
+		if (runWholeFileByMagicCommand) {
+			if (resetFirst) {
+				await execute(terminal, `%reset -f`);
+			}
+			await execute(terminal, `%run ${editor.document.fileName}`);
+		} else {
+			await execute(terminal, editor.document.getText());
 		}
-		await execute(terminal, `%run ${editor.document.fileName}`);
 	}
 
 	async function cmdResetAndRunFile() {

@@ -81,6 +81,11 @@
 					"type": "number",
 					"default": 100,
 					"markdownDescription": "Minimum delay between sending code to the terminal and executing it."
+				},
+				"ipython.runWholeFileByMagicCommand": {
+					"type": "boolean",
+					"default": true,
+					"markdownDescription": "If true, use %run command, else paste and run the whole code in the same way as cell-wise execution"
 				}
 			}
 		},
