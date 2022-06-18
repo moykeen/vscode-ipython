@@ -209,9 +209,6 @@ export function activate(context: vscode.ExtensionContext) {
 		console.log(`Waiting ${ipythonDelayMsec} milliseconds after IPython launch...`);
 		await wait(ipythonDelayMsec);
 
-		// setup for handling multi line commands
-		await execute(terminal, "from IPython.terminal import interactiveshell; interactiveshell.TerminalInteractiveShell.autoindent = False");
-
 		return terminal;
 	}
 
