@@ -85,7 +85,7 @@
 				"ipython.runWholeFileByMagicCommand": {
 					"type": "boolean",
 					"default": true,
-					"markdownDescription": "If true, use %run command, else paste and run the whole code in the same way as cell-wise execution"
+					"markdownDescription": "If checked, use %run command, else paste and run the whole code in the same way as cell-wise execution"
 				}
 			}
 		},
