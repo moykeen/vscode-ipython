@@ -55,6 +55,7 @@ export function activate(context: vscode.ExtensionContext) {
 	let minExecDelayMsec: number;
 	let launchArgs: string;
 	let startupCmds: string[];
+	let runWholeFileByMagicCommand: boolean;
 	function updateConfig() {
 		console.log('Updating configuration...');
 		let config = vscode.workspace.getConfiguration('ipython');
@@ -67,7 +68,68 @@ export function activate(context: vscode.ExtensionContext) {
 		minExecDelayMsec = config.get('delays.minimumExecutionDelayMilliseconds') as number;
 		launchArgs = config.get('launchArguments') as string;
 		startupCmds = config.get('startupCommands') as string[];
+		runWholeFileByMagicCommand = config.get('runWholeFileByMagicCommand') as boolean;
 	}
+
+	let timeout: NodeJS.Timer | undefined = undefined;
+	const cellHeaderDecorationType = vscode.window.createTextEditorDecorationType({
+		isWholeLine: true,
+		borderWidth: `1px 0 0 0`,
+		borderStyle: 'solid'
+	});
+	let activeEditor = vscode.window.activeTextEditor;
+
+	function updateDecorations() {
+		if (!activeEditor) {
+			return;
+		}
+		let config = vscode.workspace.getConfiguration('ipython');
+		let cellFlag = config.get('cellTag') as string;
+		const cellPatternForHeaderDetection = new RegExp(cellFlag.replace(' ', '\\s*'), 'g');
+
+		const text = activeEditor.document.getText();
+		const cellHeaders: vscode.DecorationOptions[] = [];
+		let match;
+		while ((match = cellPatternForHeaderDetection.exec(text))) {
+			const startPos = activeEditor.document.positionAt(match.index);
+			const endPos = activeEditor.document.positionAt(match.index + match[0].length);
+			const decoration = { range: new vscode.Range(startPos, endPos), hoverMessage: 'Number **' + match[0] + '**' };
+			cellHeaders.push(decoration);
+		}
+		activeEditor.setDecorations(cellHeaderDecorationType, cellHeaders);
+	}
+
+	function triggerUpdateDecorations(throttle = false) {
+		if (timeout) {
+			clearTimeout(timeout);
+			timeout = undefined;
+		}
+		if (throttle) {
+			timeout = setTimeout(updateDecorations, 500);
+		} else {
+			updateDecorations();
+		}
+	}
+
+	if (activeEditor) {
+		triggerUpdateDecorations();
+	}
+
+	vscode.window.onDidChangeActiveTextEditor(editor => {
+		activeEditor = editor;
+		if (editor) {
+			triggerUpdateDecorations();
+		}
+	}, null, context.subscriptions);
+
+	vscode.workspace.onDidChangeTextDocument(event => {
+		if (event.contentChanges.length === 0) {
+			return;
+		}
+		if (activeEditor && event.document === activeEditor.document) {
+			triggerUpdateDecorations(true);
+		}
+	}, null, context.subscriptions);
 
 	// === LOCAL HELPERS ===
 	async function execute(terminal: vscode.Terminal, cmd: string) {
@@ -85,40 +147,42 @@ export function activate(context: vscode.ExtensionContext) {
 		// users will have to tweak the delay parameters until things behave in
 		// their systems. This is probably why the original code used the `%run`
 		// magic command instead.
-		if (cmd.length > 0) {
-			terminal.show(true);  // preserve focus
-			// FIXME: This returns immediately, before the terminal has updated,
-			// so no amount of `minimumExecutionDelayMilliseconds` will be
-			// correct if `cmd` varies in length.
-			terminal.sendText(cmd, false);
-			console.log(`Command sent to terminal`);
-			let lines = cmd.split(newLine);
-			let lastLine = lines[lines.length - 1];
-			// Attempt to detect if the last line was indented.
-			if(lastLine.startsWith(' ') || lastLine.startsWith('\t')) {
-				terminal.sendText('', true);
-				console.log(`Newline sent to terminal due to indentation`);
-			}
-			// NOTE: In IPython, ESC, Enter executes the buffer. However, we
-			// cannot send this combination via standard input. See
-			// https://github.com/prompt-toolkit/python-prompt-toolkit/issues/1637
-			// let executeBuffer: string = '\x1B\x0D'; // ESC, Enter
-			// terminal.sendText(executeBuffer, false);
-			let n100Chars = cmd.length / 100;
-			let delay = n100Chars * execDelayPer100CharsMsec + minExecDelayMsec;
-			console.log(`Waiting ${delay} milliseconds to send execution newline for ${cmd.length} characters...`);
-			await wait(delay);
-			terminal.sendText('', true);
-			console.log(`Newline sent to terminal to execute`);
-			await vscode.commands.executeCommand('workbench.action.terminal.scrollToBottom');
+		if (cmd.length === 0) {
+			return;
 		}
+
+		terminal.show(true);  // preserve focus
+		let lines = cmd.split(newLine);
+		lines = lines.filter(s => s.trim());
+		console.log(lines);
+
+		// for the single line case, just send text
+		if (lines.length === 1) {
+			terminal.sendText(lines[0], false);
+			await wait(minExecDelayMsec);
+			terminal.sendText('', true);
+
+		// for the multi line case
+		} else {
+			// send Ctrl-O to enable multiline mode
+			await vscode.commands.executeCommand("workbench.action.terminal.sendSequence", { text : "\x0f" });
+			for (let line of lines) {
+				terminal.sendText(line, true);
+			}
+			await wait(minExecDelayMsec);
+			terminal.sendText('', true);
+		}
+
+		await vscode.commands.executeCommand('workbench.action.terminal.scrollToBottom');
+
 	}
 
 	async function createTerminal(terminalName: string): Promise<vscode.Terminal> {
 		console.log('Creating IPython Terminal...');
 
 		// -- Create and Tag IPython Terminal
-		await vscode.commands.executeCommand('workbench.action.createTerminalEditor');
+		// await vscode.commands.executeCommand('workbench.action.createTerminalEditor');
+		await vscode.commands.executeCommand("workbench.action.terminal.new");  // prefer normal terminal
 		await vscode.commands.executeCommand('workbench.action.terminal.renameWithArg', {name : terminalName});
 		console.log(`Waiting ${terminalDelayMsec} before executing IPython`);
 		await wait(terminalDelayMsec);
@@ -144,6 +208,7 @@ export function activate(context: vscode.ExtensionContext) {
 		// See notes in `execute` regarding delays.
 		console.log(`Waiting ${ipythonDelayMsec} milliseconds after IPython launch...`);
 		await wait(ipythonDelayMsec);
+
 		return terminal;
 	}
 
@@ -183,11 +248,16 @@ export function activate(context: vscode.ExtensionContext) {
 		updateConfig();
 		console.log('IPython run file...');
 		let editor = getEditor();
+
 		let terminal = await getTerminal(editor.document.fileName);
 		if (resetFirst) {
 			await execute(terminal, `%reset -f`);
 		}
-		await execute(terminal, `%run ${editor.document.fileName}`);
+		if (runWholeFileByMagicCommand) {
+			await execute(terminal, `%run ${editor.document.fileName}`);
+		} else {
+			await execute(terminal, editor.document.getText());
+		}
 	}
 
 	async function cmdResetAndRunFile() {
@@ -203,6 +273,15 @@ export function activate(context: vscode.ExtensionContext) {
 		let terminal = await getTerminal(editor.document.fileName);
 		let cmd = '';
 		for (let selection of editor.selections) {
+			// if selection has leading whilespaces, include them to capture correct indent
+			const leadingLetters = editor.document.getText(new vscode.Selection(
+				new vscode.Position(selection.start.line, 0),
+				new vscode.Position(selection.start.line, selection.start.character)).with());
+			if (leadingLetters.trim().length === 0) {
+				selection = new vscode.Selection(
+					new vscode.Position(selection.start.line, 0), selection.end
+				);
+			}
 			cmd += editor.document.getText(selection.with());
 		}
 		await execute(terminal, cmd);

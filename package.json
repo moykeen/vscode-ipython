@@ -3,7 +3,7 @@
 	"displayName": "ipython",
 	"description": "IPython integration supporting direct interactive usage and commands.",
 	"icon": "md_img/icon.png",
-	"version": "2022.5.26",
+	"version": "2022.6.17",
 	"publisher": "shaperilio",
 	"repository": "https://github.com/shaperilio/vscode-ipython",
 	"engines": {
@@ -11,7 +11,8 @@
 	},
 	"keywords": [
 		"python",
-		"IPython"
+		"IPython",
+		"REPL"
 	],
 	"categories": [
 		"Programming Languages",
@@ -42,8 +43,8 @@
 			"properties": {
 				"ipython.launchArguments": {
 					"type": "string",
-					"default": "",
-					"markdownDescription": "Input command to ipython call on launch (e.g. `--matplotlib=qt5`)"
+					"default": "--no-autoindent",
+					"description": "Input command to ipython call on launch (e.g. --matplotlib=qt5). Strongly recommend using `--no-autoindent` for proper code loading to IPython."
 				},
 				"ipython.startupCommands": {
 					"type": "array",
@@ -81,6 +82,11 @@
 					"type": "number",
 					"default": 100,
 					"markdownDescription": "Minimum delay between sending code to the terminal and executing it."
+				},
+				"ipython.runWholeFileByMagicCommand": {
+					"type": "boolean",
+					"default": true,
+					"markdownDescription": "If checked, use %run command, else paste and run the whole code in the same way as cell-wise execution"
 				}
 			}
 		},
