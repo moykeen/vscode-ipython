@@ -11,7 +11,8 @@
 	},
 	"keywords": [
 		"python",
-		"IPython"
+		"IPython",
+		"REPL"
 	],
 	"categories": [
 		"Programming Languages",
