@@ -4,7 +4,7 @@
 	"description": "IPython integration supporting direct interactive usage and commands.",
 	"icon": "md_img/icon.png",
 	"version": "2022.6.17",
-	"publisher": "shaperilio",
+	"publisher": "moykeen",
 	"repository": "https://github.com/shaperilio/vscode-ipython",
 	"engines": {
 		"vscode": "^1.60.0"
