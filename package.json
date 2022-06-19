@@ -4,7 +4,7 @@
 	"description": "IPython integration supporting direct interactive usage and commands.",
 	"icon": "md_img/icon.png",
 	"version": "2022.6.17",
-	"publisher": "shaperilio",
+	"publisher": "moykeen",
 	"repository": "https://github.com/shaperilio/vscode-ipython",
 	"engines": {
 		"vscode": "^1.60.0"
@@ -87,6 +87,11 @@
 					"type": "boolean",
 					"default": true,
 					"markdownDescription": "If checked, use %run command, else paste and run the whole code in the same way as cell-wise execution"
+				},
+				"ipython.tryResolvingRelativeImport": {
+					"type": "boolean",
+					"default": true,
+					"markdownDescription": "If checked, try resolving relative import statements (such as 'from .module import something'. Note it can fail if workspace is complicated."
 				}
 			}
 		},

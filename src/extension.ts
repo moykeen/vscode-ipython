@@ -1,6 +1,7 @@
 // The module 'vscode' contains the VS Code extensibility API
 // Import the module and reference it with the alias vscode in your code below
 import * as vscode from 'vscode';
+import * as path from 'path';
 
 // === CONSTANTS ===
 
@@ -56,6 +57,7 @@ export function activate(context: vscode.ExtensionContext) {
 	let launchArgs: string;
 	let startupCmds: string[];
 	let runWholeFileByMagicCommand: boolean;
+	let tryResolvingRelativeImport: boolean;
 	function updateConfig() {
 		console.log('Updating configuration...');
 		let config = vscode.workspace.getConfiguration('ipython');
@@ -69,6 +71,7 @@ export function activate(context: vscode.ExtensionContext) {
 		launchArgs = config.get('launchArguments') as string;
 		startupCmds = config.get('startupCommands') as string[];
 		runWholeFileByMagicCommand = config.get('runWholeFileByMagicCommand') as boolean;
+		tryResolvingRelativeImport = config.get('tryResolvingRelativeImport') as boolean;
 	}
 
 	let timeout: NodeJS.Timer | undefined = undefined;
@@ -151,6 +154,12 @@ export function activate(context: vscode.ExtensionContext) {
 			return;
 		}
 
+		let [dotPath, doubleDotPath]: [string | undefined, string | undefined] = [undefined, undefined];
+		if (tryResolvingRelativeImport) {
+			[dotPath, doubleDotPath] = deriveAbsolutifyingPath();
+		}
+		console.log(dotPath, doubleDotPath);
+
 		terminal.show(true);  // preserve focus
 		let lines = cmd.split(newLine);
 		lines = lines.filter(s => s.trim());
@@ -158,7 +167,7 @@ export function activate(context: vscode.ExtensionContext) {
 
 		// for the single line case, just send text
 		if (lines.length === 1) {
-			terminal.sendText(lines[0], false);
+			terminal.sendText(processLine(lines[0], dotPath, doubleDotPath), false);
 			await wait(minExecDelayMsec);
 			terminal.sendText('', true);
 
@@ -167,7 +176,7 @@ export function activate(context: vscode.ExtensionContext) {
 			// send Ctrl-O to enable multiline mode
 			await vscode.commands.executeCommand("workbench.action.terminal.sendSequence", { text : "\x0f" });
 			for (let line of lines) {
-				terminal.sendText(line, true);
+				terminal.sendText(processLine(line, dotPath, doubleDotPath), true);
 			}
 			await wait(minExecDelayMsec);
 			terminal.sendText('', true);
@@ -241,6 +250,42 @@ export function activate(context: vscode.ExtensionContext) {
 			throw new Error(`Editor file is ${editor.document.languageId}; expected Python.`);
 		}
 		return editor;
+	}
+
+	function deriveAbsolutifyingPath(): [string | undefined, string | undefined] {
+		// give up
+		if (vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders.length !== 1) {
+			return [undefined, undefined];
+		}
+
+		let workspaceFolder = vscode.workspace.workspaceFolders![0].uri.path;
+		let filePath = getEditor().document.uri.path;
+
+		// check if the current document is in workspaceFolder
+		if (!filePath.startsWith(workspaceFolder)) {
+			return [undefined, undefined];
+		}
+
+		let pathFromWorkspace = path.dirname(filePath).substring(workspaceFolder.length + 1).split('/'); // +1 for '/'
+		let dotPath = pathFromWorkspace.join('.') + '.';
+		let doubleDotPath = undefined;
+		if (pathFromWorkspace.length >= 2) {
+			doubleDotPath = pathFromWorkspace.slice(0, -1).join('.') + '.';
+		}
+		return [dotPath, doubleDotPath];
+	}
+
+	function processLine(line: string, dotPath: string | undefined, doubleDotPath: string | undefined): string {
+		if (line.trimStart().startsWith("from ..")) {
+			if (doubleDotPath) {
+				return line.replace("from ..", "from " + doubleDotPath);
+			}
+		} else if (line.trimStart().startsWith("from .")) {
+			if (dotPath) {
+				return line.replace("from .", "from " + dotPath);
+			}
+		}
+		return line;
 	}
 
 	// === COMMANDS ===
