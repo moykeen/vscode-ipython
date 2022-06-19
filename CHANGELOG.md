@@ -16,3 +16,4 @@ All notable changes to the "ipython" extension will be documented in this file.
 - Introduce cell separator (horizontal rule)
 - Option to run whole file without %run command
 - Elaborate multi-line code execution
+- Resolve relative import

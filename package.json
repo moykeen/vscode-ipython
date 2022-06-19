@@ -87,6 +87,11 @@
 					"type": "boolean",
 					"default": true,
 					"markdownDescription": "If checked, use %run command, else paste and run the whole code in the same way as cell-wise execution"
+				},
+				"ipython.tryResolvingRelativeImport": {
+					"type": "boolean",
+					"default": true,
+					"markdownDescription": "If checked, try resolving relative import statements (such as 'from .module import something'. Note it can fail if workspace is complicated."
 				}
 			}
 		},
