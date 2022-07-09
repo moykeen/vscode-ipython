@@ -63,25 +63,20 @@
 					"default": true,
 					"markdownDescription": "Check this box to create on terminal per file when executing lines / cells; uncheck it to run all code in the same IPython terminal."
 				},
-				"ipython.delays.terminalDelayMilliseconds": {
+				"ipython.delays.delayBeforeTerminalCreationMilliseconds": {
 					"type": "number",
 					"default": 1000,
 					"markdownDescription": "Millisecond delay after launching the terminal and before executing IPython. Depends on e.g. if VSCode is activating an environment."
 				},
-				"ipython.delays.ipythonDelayMilliseconds": {
+				"ipython.delays.delayAfterTerminalCreationMilliseconds": {
 					"type": "number",
 					"default": 1500,
 					"markdownDescription": "Millisecond delay after launching IPython before sending any commands."
 				},
-				"ipython.delays.executionDelayPer100CharactersMilliseconds": {
+				"ipython.delays.executionDelayPerLineMilliseconds": {
 					"type": "number",
-					"default": 25,
-					"markdownDescription": "Millisecond delay added per 100 characters until code is executed. Total delay is this plus `#ipython.delays.minimumExecutionDelayMilliseconds#`."
-				},
-				"ipython.delays.minimumExecutionDelayMilliseconds": {
-					"type": "number",
-					"default": 100,
-					"markdownDescription": "Minimum delay between sending code to the terminal and executing it."
+					"default": 5,
+					"markdownDescription": "Millisecond delay between sending a line of code to the terminal."
 				},
 				"ipython.runWholeFileByMagicCommand": {
 					"type": "boolean",

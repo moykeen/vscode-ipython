@@ -50,10 +50,9 @@ export function activate(context: vscode.ExtensionContext) {
 	// Configuration handling
 	let cellPattern: RegExp;
 	let uniqueTerminals: boolean;
-	let terminalDelayMsec: number;
-	let ipythonDelayMsec: number;
-	let execDelayPer100CharsMsec: number;
-	let minExecDelayMsec: number;
+	let delayBeforeTerminalCreationMsec: number;
+	let delayAfterTerminalCreationMsec: number;
+	let execDelayPerLine: number;
 	let launchArgs: string;
 	let startupCmds: string[];
 	let runWholeFileByMagicCommand: boolean;
@@ -64,10 +63,9 @@ export function activate(context: vscode.ExtensionContext) {
 		let cellFlag = config.get('cellTag') as string;
 		cellPattern = new RegExp(`^(?:${cellFlag.replace(' ', '\\s*')})`);
 		uniqueTerminals = config.get('oneTerminalPerFile') as boolean;
-		terminalDelayMsec = config.get('delays.terminalDelayMilliseconds') as number;
-		ipythonDelayMsec = config.get('delays.ipythonDelayMilliseconds') as number;
-		execDelayPer100CharsMsec = config.get('delays.executionDelayPer100CharactersMilliseconds') as number;
-		minExecDelayMsec = config.get('delays.minimumExecutionDelayMilliseconds') as number;
+		delayBeforeTerminalCreationMsec = config.get('delays.delayBeforeTerminalCreationMilliseconds') as number;
+		delayAfterTerminalCreationMsec = config.get('delays.delayAfterTerminalCreationMilliseconds') as number;
+		execDelayPerLine = config.get('delays.executionDelayPerLineMilliseconds') as number;
 		launchArgs = config.get('launchArguments') as string;
 		startupCmds = config.get('startupCommands') as string[];
 		runWholeFileByMagicCommand = config.get('runWholeFileByMagicCommand') as boolean;
@@ -136,29 +134,20 @@ export function activate(context: vscode.ExtensionContext) {
 
 	// === LOCAL HELPERS ===
 	async function execute(terminal: vscode.Terminal, cmd: string) {
-		// There is a fundamental issue here.
-		// `terminal.sendText` returns immediately, and it takes quite a bit for
-		// the terminal to actually process standard input.
-		// There's no way (that I know of) to check the standard output of the
-		// terminal, and I don't know how else we'd check to see if the terminal
-		// was done processing the input buffer.
-		// The end result is that, the longer `cmd` is, the more we have to wait
-		// until we send the newline to execute -- otherwise, it just gets
-		// appended to the buffer as far as IPython is concerned. If you run
-		// IPython with --simple-prompt, then this isn't an issue - but you lose
-		// color and tab-completion (and maybe more). So this is clunky at best;
-		// users will have to tweak the delay parameters until things behave in
-		// their systems. This is probably why the original code used the `%run`
-		// magic command instead.
+		// In the original repository, a noticeable delay is intentionally mixed to make sure completing sendText.
+		// In current design, I modified sending text line-by-line, so that every line is expected to be sent promptly.
+		// I therefore removed such delay. Only trivial delay is kept just in case.
+
 		if (cmd.length === 0) {
 			return;
 		}
 
-		let [dotPath, doubleDotPath]: [string | undefined, string | undefined] = [undefined, undefined];
+		// let [dotPath, doubleDotPath]: [string | undefined, string | undefined] = [undefined, undefined];
+		let pathFromWorkspace: string[] | undefined = undefined;
 		if (tryResolvingRelativeImport) {
-			[dotPath, doubleDotPath] = deriveAbsolutifyingPath();
+			pathFromWorkspace = derivePathFromWorkspace();
 		}
-		console.log(dotPath, doubleDotPath);
+		console.log(pathFromWorkspace);
 
 		terminal.show(true);  // preserve focus
 		let lines = cmd.split(newLine);
@@ -167,8 +156,8 @@ export function activate(context: vscode.ExtensionContext) {
 
 		// for the single line case, just send text
 		if (lines.length === 1) {
-			terminal.sendText(processLine(lines[0], dotPath, doubleDotPath), false);
-			await wait(minExecDelayMsec);
+			terminal.sendText(processLine(lines[0], pathFromWorkspace), false);
+			await wait(execDelayPerLine);
 			terminal.sendText('', true);
 
 		// for the multi line case
@@ -176,9 +165,9 @@ export function activate(context: vscode.ExtensionContext) {
 			// send Ctrl-O to enable multiline mode
 			await vscode.commands.executeCommand("workbench.action.terminal.sendSequence", { text : "\x0f" });
 			for (let line of lines) {
-				terminal.sendText(processLine(line, dotPath, doubleDotPath), true);
+				terminal.sendText(processLine(line, pathFromWorkspace), true);
 			}
-			await wait(minExecDelayMsec);
+			await wait(execDelayPerLine);
 			terminal.sendText('', true);
 		}
 
@@ -193,8 +182,8 @@ export function activate(context: vscode.ExtensionContext) {
 		// await vscode.commands.executeCommand('workbench.action.createTerminalEditor');
 		await vscode.commands.executeCommand("workbench.action.terminal.new");  // prefer normal terminal
 		await vscode.commands.executeCommand('workbench.action.terminal.renameWithArg', {name : terminalName});
-		console.log(`Waiting ${terminalDelayMsec} before executing IPython`);
-		await wait(terminalDelayMsec);
+		console.log(`Waiting ${delayBeforeTerminalCreationMsec} before executing IPython`);
+		await wait(delayBeforeTerminalCreationMsec);
 		let terminal = vscode.window.activeTerminal as vscode.Terminal;
 
 		// Launch options
@@ -215,8 +204,8 @@ export function activate(context: vscode.ExtensionContext) {
 		console.log('Startup Command: ', cmd);
 		await execute(terminal, cmd);
 		// See notes in `execute` regarding delays.
-		console.log(`Waiting ${ipythonDelayMsec} milliseconds after IPython launch...`);
-		await wait(ipythonDelayMsec);
+		console.log(`Waiting ${delayAfterTerminalCreationMsec} milliseconds after IPython launch...`);
+		await wait(delayAfterTerminalCreationMsec);
 
 		return terminal;
 	}
@@ -255,10 +244,10 @@ export function activate(context: vscode.ExtensionContext) {
 		return editor;
 	}
 
-	function deriveAbsolutifyingPath(): [string | undefined, string | undefined] {
+	function derivePathFromWorkspace(): string[] | undefined {
 		// give up
 		if (vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders.length !== 1) {
-			return [undefined, undefined];
+			return undefined;
 		}
 
 		let workspaceFolder = vscode.workspace.workspaceFolders![0].uri.path;
@@ -266,27 +255,28 @@ export function activate(context: vscode.ExtensionContext) {
 
 		// check if the current document is in workspaceFolder
 		if (!filePath.startsWith(workspaceFolder)) {
-			return [undefined, undefined];
+			return undefined;
 		}
 
-		let pathFromWorkspace = path.dirname(filePath).substring(workspaceFolder.length + 1).split('/'); // +1 for '/'
-		let dotPath = pathFromWorkspace.join('.') + '.';
-		let doubleDotPath = undefined;
-		if (pathFromWorkspace.length >= 2) {
-			doubleDotPath = pathFromWorkspace.slice(0, -1).join('.') + '.';
-		}
-		return [dotPath, doubleDotPath];
+		return path.dirname(filePath).substring(workspaceFolder.length + 1).split('/'); // +1 for '/'
 	}
 
-	function processLine(line: string, dotPath: string | undefined, doubleDotPath: string | undefined): string {
-		if (line.trimStart().startsWith("from ..")) {
-			if (doubleDotPath) {
-				return line.replace("from ..", "from " + doubleDotPath);
-			}
-		} else if (line.trimStart().startsWith("from .")) {
-			if (dotPath) {
-				return line.replace("from .", "from " + dotPath);
-			}
+	function absolutifyDotPath(paths: string[], level: number): string {
+		if (level === 1) {
+			return paths.join('.');
+		}
+		return paths.slice(0, -(level - 1)).join('.');
+	}
+
+	function processLine(line: string, pathFromWorkspace: string[] | undefined): string {
+		const lineTrimmed = line.trimStart();
+		const dotImportPattern = /^(from [\.]+[ ]{0,1})/g;
+		const dotImportMatched = lineTrimmed.match(dotImportPattern);
+		if (dotImportMatched) {
+			const dotImport = dotImportMatched[0];
+			const level = dotImport.match(/\./g)!.length;
+			let lineModified = line.replace(dotImport, "from " + absolutifyDotPath(pathFromWorkspace!, level) + (dotImport.endsWith(" ") ? " " : "."));
+			return lineModified;
 		}
 		return line;
 	}
