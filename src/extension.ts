@@ -154,11 +154,12 @@ export function activate(context: vscode.ExtensionContext) {
 			return;
 		}
 
-		let [dotPath, doubleDotPath]: [string | undefined, string | undefined] = [undefined, undefined];
+		// let [dotPath, doubleDotPath]: [string | undefined, string | undefined] = [undefined, undefined];
+		let pathFromWorkspace: string[] | undefined = undefined;
 		if (tryResolvingRelativeImport) {
-			[dotPath, doubleDotPath] = deriveAbsolutifyingPath();
+			pathFromWorkspace = derivePathFromWorkspace();
 		}
-		console.log(dotPath, doubleDotPath);
+		console.log(pathFromWorkspace);
 
 		terminal.show(true);  // preserve focus
 		let lines = cmd.split(newLine);
@@ -167,7 +168,7 @@ export function activate(context: vscode.ExtensionContext) {
 
 		// for the single line case, just send text
 		if (lines.length === 1) {
-			terminal.sendText(processLine(lines[0], dotPath, doubleDotPath), false);
+			terminal.sendText(processLine(lines[0], pathFromWorkspace), false);
 			await wait(minExecDelayMsec);
 			terminal.sendText('', true);
 
@@ -176,7 +177,7 @@ export function activate(context: vscode.ExtensionContext) {
 			// send Ctrl-O to enable multiline mode
 			await vscode.commands.executeCommand("workbench.action.terminal.sendSequence", { text : "\x0f" });
 			for (let line of lines) {
-				terminal.sendText(processLine(line, dotPath, doubleDotPath), true);
+				terminal.sendText(processLine(line, pathFromWorkspace), true);
 			}
 			await wait(minExecDelayMsec);
 			terminal.sendText('', true);
@@ -255,10 +256,10 @@ export function activate(context: vscode.ExtensionContext) {
 		return editor;
 	}
 
-	function deriveAbsolutifyingPath(): [string | undefined, string | undefined] {
+	function derivePathFromWorkspace(): string[] | undefined {
 		// give up
 		if (vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders.length !== 1) {
-			return [undefined, undefined];
+			return undefined;
 		}
 
 		let workspaceFolder = vscode.workspace.workspaceFolders![0].uri.path;
@@ -266,27 +267,28 @@ export function activate(context: vscode.ExtensionContext) {
 
 		// check if the current document is in workspaceFolder
 		if (!filePath.startsWith(workspaceFolder)) {
-			return [undefined, undefined];
+			return undefined;
 		}
 
-		let pathFromWorkspace = path.dirname(filePath).substring(workspaceFolder.length + 1).split('/'); // +1 for '/'
-		let dotPath = pathFromWorkspace.join('.') + '.';
-		let doubleDotPath = undefined;
-		if (pathFromWorkspace.length >= 2) {
-			doubleDotPath = pathFromWorkspace.slice(0, -1).join('.') + '.';
-		}
-		return [dotPath, doubleDotPath];
+		return path.dirname(filePath).substring(workspaceFolder.length + 1).split('/'); // +1 for '/'
 	}
 
-	function processLine(line: string, dotPath: string | undefined, doubleDotPath: string | undefined): string {
-		if (line.trimStart().startsWith("from ..")) {
-			if (doubleDotPath) {
-				return line.replace("from ..", "from " + doubleDotPath);
-			}
-		} else if (line.trimStart().startsWith("from .")) {
-			if (dotPath) {
-				return line.replace("from .", "from " + dotPath);
-			}
+	function absolutifyDotPath(paths: string[], level: number): string {
+		if (level === 1) {
+			return paths.join('.');
+		}
+		return paths.slice(0, -(level - 1)).join('.');
+	}
+
+	function processLine(line: string, pathFromWorkspace: string[] | undefined): string {
+		const lineTrimmed = line.trimStart();
+		const dotImportPattern = /^(from [\.]+[ ]{0,1})/g;
+		const dotImportMatched = lineTrimmed.match(dotImportPattern);
+		if (dotImportMatched) {
+			const dotImport = dotImportMatched[0];
+			const level = dotImport.match(/\./g)!.length;
+			let lineModified = line.replace(dotImport, "from " + absolutifyDotPath(pathFromWorkspace!, level) + (dotImport.endsWith(" ") ? " " : "."));
+			return lineModified;
 		}
 		return line;
 	}
