@@ -135,42 +135,41 @@
 		"keybindings": [
 			{
 				"command": "ipython.createTerminal",
-				"key": "ctrl+shift+i c",
-				"when": "editorLangId == python"
+				"key": "ctrl+f10"
 			},
 			{
 				"command": "ipython.runFile",
-				"key": "ctrl+shift+i f5",
+				"key": "f5",
 				"when": "ipython.extensionActive && !inDebugMode && editorTextFocus && editorLangId == python"
 			},
 			{
 				"command": "ipython.resetAndRunFile",
-				"key": "ctrl+shift+i f6",
+				"key": "ctrl+f5",
 				"when": "ipython.extensionActive && !inDebugMode && editorTextFocus && editorLangId == python"
 			},
 			{
 				"command": "ipython.runSelections",
-				"key": "ctrl+shift+i f9",
+				"key": "f6",
 				"when": "ipython.extensionActive && !inDebugMode && editorTextFocus && !findInputFocussed && !replaceInputFocussed && editorLangId == python"
 			},
 			{
 				"command": "ipython.runCell",
-				"key": "alt+enter",
+				"key": "ctrl+shift+enter",
 				"when": "ipython.extensionActive && !inDebugMode && editorTextFocus && editorLangId == python"
 			},
 			{
 				"command": "ipython.runCellAndMoveToNext",
-				"key": "shift+alt+enter",
+				"key": "ctrl+enter",
 				"when": "ipython.extensionActive && !inDebugMode && editorTextFocus && !notebookEditorFocused && editorLangId == python"
 			},
 			{
 				"command": "ipython.runToLine",
-				"key": "ctrl+shift+i l",
+				"key": "ctrl+shift+f5",
 				"when": "ipython.extensionActive && !inDebugMode && editorTextFocus && !notebookEditorFocused && editorLangId == python"
 			},
 			{
 				"command": "ipython.runFromLine",
-				"key": "ctrl+shift+i shift+l",
+				"key": "ctrl+alt+f5",
 				"when": "ipython.extensionActive && !inDebugMode && editorTextFocus && !notebookEditorFocused && editorLangId == python"
 			}
 		]
