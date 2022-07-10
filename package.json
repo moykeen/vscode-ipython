@@ -164,12 +164,12 @@
 			},
 			{
 				"command": "ipython.runToLine",
-				"key": "ctrl+shift+f5",
+				"key": "ctrl+shift+f6",
 				"when": "ipython.extensionActive && !inDebugMode && editorTextFocus && !notebookEditorFocused && editorLangId == python"
 			},
 			{
 				"command": "ipython.runFromLine",
-				"key": "ctrl+alt+f5",
+				"key": "ctrl+alt+f6",
 				"when": "ipython.extensionActive && !inDebugMode && editorTextFocus && !notebookEditorFocused && editorLangId == python"
 			}
 		]
