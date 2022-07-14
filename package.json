@@ -1,11 +1,11 @@
 {
-	"name": "ipython",
-	"displayName": "ipython",
+	"name": "ipython2",
+	"displayName": "ipython2",
 	"description": "IPython integration supporting direct interactive usage and commands.",
 	"icon": "md_img/icon.png",
 	"version": "2022.6.17",
 	"publisher": "moykeen",
-	"repository": "https://github.com/shaperilio/vscode-ipython",
+	"repository": "https://github.com/moykeen/vscode-ipython",
 	"engines": {
 		"vscode": "^1.60.0"
 	},
